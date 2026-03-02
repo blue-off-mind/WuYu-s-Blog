@@ -5,9 +5,9 @@ export type Language = "en" | "zh";
 
 export const TRANSLATIONS = {
   en: {
-    title: "Digital\nEditorial\nJournal",
-    subtitle: "Curated perspectives on design, technology, and the quiet moments in between.",
-    est: "Est. 2026 • Vol. 01",
+    title: "Starry\nIsle\nEditorials",
+    subtitle: "Dwelling on Starry Isle, in silent dreams, we capture the shimmering flow of thought.",
+    est: "Designed by Starry",
     nav: {
       journal: "Journal",
       about: "About",
@@ -101,9 +101,9 @@ export const TRANSLATIONS = {
     }
   },
   zh: {
-    title: "数字\n编辑\n日志",
-    subtitle: "关于设计、科技与生活间隙的精选视角。",
-    est: "创刊于 2026 • 第一卷",
+    title: "星岛\n社论\n日志",
+    subtitle: "栖于星岛，在静谧梦境里，记取思想的流光。",
+    est: "Designed by 星岛的夜",
     nav: {
       journal: "期刊",
       about: "关于",
