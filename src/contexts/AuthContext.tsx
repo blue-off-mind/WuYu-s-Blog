@@ -29,6 +29,17 @@ const clearSupabaseAuthStorage = () => {
   clear(window.sessionStorage);
 };
 
+const isTokenError = (message?: string) => {
+  if (!message) return false;
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("jwt") ||
+    normalized.includes("token") ||
+    normalized.includes("auth session") ||
+    normalized.includes("refresh_token")
+  );
+};
+
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
@@ -48,10 +59,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const client = supabase;
 
+    const clearInvalidSession = async () => {
+      await client.auth.signOut().catch(() => undefined);
+      clearSupabaseAuthStorage();
+      setIsAuthenticated(false);
+      setIsAdmin(false);
+    };
+
     const syncRole = async () => {
       const { data, error } = await client.rpc("is_admin");
       if (error) {
         console.error("Failed to resolve admin role:", error);
+        if (isTokenError(error.message)) {
+          await clearInvalidSession();
+        }
         setIsAdmin(false);
         return;
       }
@@ -61,10 +82,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     client.auth.getSession().then(async ({ data, error }) => {
       if (error) {
         console.error("Failed to load auth session:", error);
+        if (isTokenError(error.message)) {
+          await clearInvalidSession();
+        }
       }
       const authed = !!data.session;
       setIsAuthenticated(authed);
       if (authed) {
+        const { error: userError } = await client.auth.getUser();
+        if (userError) {
+          console.error("Failed to validate auth session:", userError);
+          if (isTokenError(userError.message)) {
+            await clearInvalidSession();
+          } else {
+            setIsAuthenticated(false);
+            setIsAdmin(false);
+          }
+          setIsLoading(false);
+          return;
+        }
         await syncRole();
       } else {
         setIsAdmin(false);

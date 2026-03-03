@@ -8,6 +8,23 @@ import { toast } from "sonner";
 
 import { SEED_ARTICLES } from "@/lib/seed";
 
+const clearSupabaseAuthStorage = () => {
+  if (typeof window === "undefined") return;
+  const clear = (storage: Storage) => {
+    const keysToDelete: string[] = [];
+    for (let i = 0; i < storage.length; i += 1) {
+      const key = storage.key(i);
+      if (!key) continue;
+      if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
+        keysToDelete.push(key);
+      }
+    }
+    keysToDelete.forEach((key) => storage.removeItem(key));
+  };
+  clear(window.localStorage);
+  clear(window.sessionStorage);
+};
+
 interface StoreContextType {
   articles: Article[];
   comments: Comment[];
@@ -101,7 +118,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             maybeJwtError.includes("auth session"))
         ) {
           // Recover from stale client tokens after deployment/session edge cases.
-          await supabase!.auth.signOut().catch(() => undefined);
+          try {
+            await supabase!.auth.signOut();
+          } catch {
+            // noop
+          }
+          clearSupabaseAuthStorage();
           const retry = await supabase!.from("articles").select("*").order("publishedAt", { ascending: false });
           dbArticles = retry.data;
           artError = retry.error;
@@ -177,26 +199,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .subscribe();
 
         let logsSub: RealtimeChannel | null = null;
-        supabase!
-          .from("moderation_logs")
-          .select("id")
-          .limit(1)
-          .then(({ error }) => {
+        void (async () => {
+          try {
+            const { error } = await supabase!.from("moderation_logs").select("id").limit(1);
             if (error) return;
             logsSub = supabase!
-            .channel('public:moderation_logs')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'moderation_logs' }, (payload) => {
-              if (payload.eventType === 'INSERT') {
-                setModerationLogs(prev => [payload.new as ModerationLog, ...prev]);
+              .channel('public:moderation_logs')
+              .on('postgres_changes', { event: '*', schema: 'public', table: 'moderation_logs' }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                  setModerationLogs(prev => [payload.new as ModerationLog, ...prev]);
                 }
               })
               .subscribe();
-          })
-          .catch((error) => {
+          } catch (error) {
             if (!isAbortLikeError(error)) {
               console.warn("Moderation logs probe failed:", error);
             }
-          });
+          }
+        })();
 
       return () => {
         active = false;
