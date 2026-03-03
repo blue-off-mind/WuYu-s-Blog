@@ -15,25 +15,29 @@ interface CommentSectionProps {
 
 export function CommentSection({ articleId }: CommentSectionProps) {
   const { addComment, deleteComment, getCommentsByArticle } = useStore();
-  const { isAuthenticated } = useAuth();
+  const { isAdmin } = useAuth();
   const { t } = useLanguage();
   const comments = getCommentsByArticle(articleId);
   const [author, setAuthor] = useState("");
   const [content, setContent] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
 
-    addComment({
-      articleId,
-      author: author.trim() || "Anonymous Reader",
-      content: content.trim(),
-    });
-
-    setContent("");
-    setAuthor("");
-    toast.success(t.comments.success);
+    try {
+      await addComment({
+        articleId,
+        author: author.trim() || "Anonymous Reader",
+        content: content.trim(),
+      });
+      setContent("");
+      setAuthor("");
+      toast.success(t.comments.success);
+    } catch (error) {
+      console.error("Failed to add comment:", error);
+      toast.error("Failed to post comment");
+    }
   };
 
   return (
@@ -52,12 +56,17 @@ export function CommentSection({ articleId }: CommentSectionProps) {
                   <span className="text-[10px] text-muted-foreground uppercase tracking-widest">
                     {new Date(comment.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} - {new Date(comment.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                   </span>
-                  {isAuthenticated && (
+                  {isAdmin && (
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         if (confirm(t.comments.delete)) {
-                          deleteComment(comment.id);
-                          toast.success(t.comments.deleted);
+                          try {
+                            await deleteComment(comment.id);
+                            toast.success(t.comments.deleted);
+                          } catch (error) {
+                            console.error("Failed to delete comment:", error);
+                            toast.error("Failed to delete comment");
+                          }
                         }
                       }}
                       className="text-destructive hover:text-destructive/80 transition-colors p-1 ml-2"

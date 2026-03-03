@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+﻿import { Link } from "wouter";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 export function Header() {

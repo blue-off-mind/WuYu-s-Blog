@@ -51,6 +51,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     likes: typeof article.likes === "number" ? article.likes : Number(article.likes ?? 0),
   });
 
+  const isAbortLikeError = (error: unknown) => {
+    const message =
+      typeof error === "object" && error !== null && "message" in error
+        ? String((error as { message?: unknown }).message ?? "")
+        : String(error ?? "");
+    return message.toLowerCase().includes("abort");
+  };
+
   const hydrateArticleById = useCallback(async (id: string) => {
     if (!supabase) return;
     const { data, error } = await supabase.from("articles").select("*").eq("id", id).single();
@@ -68,11 +76,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     console.log("Supabase Enabled:", isSupabaseEnabled);
 
     if (isSupabaseEnabled) {
+      let active = true;
       // Supabase Mode
       const fetchSupabaseData = async () => {
-        let { data: dbArticles, error: artError } = await supabase!.from("articles").select("*").order("publishedAt", { ascending: false });
-        const { data: dbComments, error: comError } = await supabase!.from("comments").select("*").order("createdAt", { ascending: false });
-        const { data: dbLogs, error: logsError } = await supabase!.from("moderation_logs").select("*").order("createdAt", { ascending: false });
+        const [
+          articlesResult,
+          commentsResult,
+          logsResult,
+        ] = await Promise.all([
+          supabase!.from("articles").select("*").order("publishedAt", { ascending: false }),
+          supabase!.from("comments").select("*").order("createdAt", { ascending: false }),
+          supabase!.from("moderation_logs").select("*").order("createdAt", { ascending: false }),
+        ]);
+
+        let { data: dbArticles, error: artError } = articlesResult;
+        const { data: dbComments, error: comError } = commentsResult;
+        const { data: dbLogs, error: logsError } = logsResult;
 
         const maybeJwtError = (artError?.message || "").toLowerCase();
         if (
@@ -87,8 +106,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           dbArticles = retry.data;
           artError = retry.error;
         }
-        
-        if (artError) {
+
+        if (!active) return;
+
+        if (artError && !isAbortLikeError(artError)) {
           console.error("Error fetching articles:", artError);
           setConnectionStatus('error');
           // Detect missing table error specifically
@@ -97,11 +118,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           } else {
             toast.error("Failed to sync with database.");
           }
-        } else {
+        } else if (!artError) {
           setConnectionStatus('connected');
         }
-        if (comError) console.error("Error fetching comments:", comError);
-        if (logsError) console.warn("Moderation logs unavailable:", logsError.message);
+        if (comError && !isAbortLikeError(comError)) {
+          console.error("Error fetching comments:", comError);
+        }
+        if (logsError && !isAbortLikeError(logsError)) {
+          console.warn("Moderation logs unavailable:", logsError.message);
+        }
 
         if (dbArticles) {
           setArticles((dbArticles as Article[]).map((article) => normalizeArticle(article) as Article));
@@ -151,24 +176,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
         .subscribe();
 
-      let logsSub: RealtimeChannel | null = null;
-      supabase!
-        .from("moderation_logs")
-        .select("id")
-        .limit(1)
-        .then(({ error }) => {
-          if (error) return;
-          logsSub = supabase!
+        let logsSub: RealtimeChannel | null = null;
+        supabase!
+          .from("moderation_logs")
+          .select("id")
+          .limit(1)
+          .then(({ error }) => {
+            if (error) return;
+            logsSub = supabase!
             .channel('public:moderation_logs')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'moderation_logs' }, (payload) => {
               if (payload.eventType === 'INSERT') {
                 setModerationLogs(prev => [payload.new as ModerationLog, ...prev]);
-              }
-            })
-            .subscribe();
-        });
+                }
+              })
+              .subscribe();
+          })
+          .catch((error) => {
+            if (!isAbortLikeError(error)) {
+              console.warn("Moderation logs probe failed:", error);
+            }
+          });
 
       return () => {
+        active = false;
         supabase!.removeChannel(articlesSub);
         supabase!.removeChannel(commentsSub);
         if (logsSub) supabase!.removeChannel(logsSub);
@@ -300,7 +331,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
 
     if (isSupabaseEnabled) {
-      await supabase!.from("comments").insert(newComment);
+      const { error } = await supabase!.from("comments").insert(newComment);
+      if (error) throw error;
     } else {
       setComments((prev) => [newComment, ...prev]);
     }
@@ -320,8 +352,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
 
     if (isSupabaseEnabled) {
-      await supabase!.from("comments").delete().eq("id", id);
-      await supabase!.from("moderation_logs").insert(logEntry);
+      const { error } = await supabase!.rpc("delete_comment_with_log", {
+        p_comment_id: id,
+        p_log_id: logEntry.id,
+        p_moderator: logEntry.moderator,
+      });
+      if (error) throw error;
     } else {
       setComments((prev) => prev.filter((c) => c.id !== id));
       setModerationLogs((prev) => [logEntry, ...prev]);

@@ -24,6 +24,60 @@ create policy "Admins can insert moderation logs"
   on public.moderation_logs for insert
   with check (public.is_admin());
 
+-- Atomic helper: admin-only comment deletion with moderation log
+drop function if exists public.delete_comment_with_log(text, text, text);
+create or replace function public.delete_comment_with_log(
+  p_comment_id text,
+  p_log_id text,
+  p_moderator text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_comment public.comments%rowtype;
+begin
+  if not public.is_admin() then
+    raise exception 'Only admins can moderate comments'
+      using errcode = '42501';
+  end if;
+
+  select *
+  into v_comment
+  from public.comments
+  where id = p_comment_id
+  for update;
+
+  if not found then
+    raise exception 'Comment % not found', p_comment_id
+      using errcode = 'P0002';
+  end if;
+
+  insert into public.moderation_logs (
+    id,
+    "articleId",
+    action,
+    "targetContent",
+    moderator,
+    "createdAt"
+  )
+  values (
+    p_log_id,
+    v_comment."articleId",
+    'DELETE_COMMENT',
+    v_comment.content,
+    p_moderator,
+    now()
+  );
+
+  delete from public.comments where id = p_comment_id;
+end;
+$$;
+
+grant execute on function public.delete_comment_with_log(text, text, text) to authenticated, service_role;
+
 -- Enable Realtime
 do $$
 begin
