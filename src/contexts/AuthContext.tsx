@@ -7,10 +7,27 @@ interface AuthContextType {
   isAdmin: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
-  logout: () => Promise<void>;
+  logout: () => Promise<{ success: boolean; message?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const clearSupabaseAuthStorage = () => {
+  if (typeof window === "undefined") return;
+  const clear = (storage: Storage) => {
+    const keysToDelete: string[] = [];
+    for (let i = 0; i < storage.length; i += 1) {
+      const key = storage.key(i);
+      if (!key) continue;
+      if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
+        keysToDelete.push(key);
+      }
+    }
+    keysToDelete.forEach((key) => storage.removeItem(key));
+  };
+  clear(window.localStorage);
+  clear(window.sessionStorage);
+};
 
 export function useAuth() {
   const context = useContext(AuthContext);
@@ -90,10 +107,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    if (!supabase) return;
-    await supabase.auth.signOut();
+    // Always clear local auth state so UI exits admin mode immediately.
     setIsAuthenticated(false);
     setIsAdmin(false);
+
+    if (!supabase) {
+      return { success: true };
+    }
+
+    const { error } = await supabase.auth.signOut();
+    // Defensive cleanup for stale tokens that may survive failed sign-out calls.
+    clearSupabaseAuthStorage();
+    if (error) {
+      console.error("Failed to sign out:", error);
+      return { success: false, message: error.message };
+    }
+
+    return { success: true };
   };
 
   return (

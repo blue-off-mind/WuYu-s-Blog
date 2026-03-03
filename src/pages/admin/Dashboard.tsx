@@ -76,7 +76,16 @@ export default function Dashboard() {
             <Button variant="outline" onClick={() => setLocation("/admin/comments")}>
               <MessageSquare className="mr-2 w-4 h-4" /> {t.admin.commentsDashboard.title}
             </Button>
-             <Button variant="outline" onClick={async () => { await logout(); setLocation("/"); }}>
+             <Button
+               variant="outline"
+               onClick={async () => {
+                 const result = await logout();
+                 if (!result.success) {
+                   toast.error(result.message || "Failed to sign out completely");
+                 }
+                 setLocation("/admin/login");
+               }}
+             >
               <LogOut className="mr-2 w-4 h-4" /> {t.nav.logout}
             </Button>
             <Button onClick={() => setLocation("/admin/editor")}>

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import type { ReactNode } from "react";
 import type { Article, Comment, ModerationLog } from "@/lib/types";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { nanoid } from "nanoid";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -69,9 +70,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (isSupabaseEnabled) {
       // Supabase Mode
       const fetchSupabaseData = async () => {
-        const { data: dbArticles, error: artError } = await supabase!.from("articles").select("*").order("publishedAt", { ascending: false });
+        let { data: dbArticles, error: artError } = await supabase!.from("articles").select("*").order("publishedAt", { ascending: false });
         const { data: dbComments, error: comError } = await supabase!.from("comments").select("*").order("createdAt", { ascending: false });
-        const { data: dbLogs } = await supabase!.from("moderation_logs").select("*").order("createdAt", { ascending: false });
+        const { data: dbLogs, error: logsError } = await supabase!.from("moderation_logs").select("*").order("createdAt", { ascending: false });
+
+        const maybeJwtError = (artError?.message || "").toLowerCase();
+        if (
+          artError &&
+          (maybeJwtError.includes("jwt") ||
+            maybeJwtError.includes("token") ||
+            maybeJwtError.includes("auth session"))
+        ) {
+          // Recover from stale client tokens after deployment/session edge cases.
+          await supabase!.auth.signOut().catch(() => undefined);
+          const retry = await supabase!.from("articles").select("*").order("publishedAt", { ascending: false });
+          dbArticles = retry.data;
+          artError = retry.error;
+        }
         
         if (artError) {
           console.error("Error fetching articles:", artError);
@@ -86,6 +101,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setConnectionStatus('connected');
         }
         if (comError) console.error("Error fetching comments:", comError);
+        if (logsError) console.warn("Moderation logs unavailable:", logsError.message);
 
         if (dbArticles) {
           setArticles((dbArticles as Article[]).map((article) => normalizeArticle(article) as Article));
@@ -135,19 +151,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
         .subscribe();
 
-      const logsSub = supabase!
-        .channel('public:moderation_logs')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'moderation_logs' }, (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setModerationLogs(prev => [payload.new as ModerationLog, ...prev]);
-          }
-        })
-        .subscribe();
+      let logsSub: RealtimeChannel | null = null;
+      supabase!
+        .from("moderation_logs")
+        .select("id")
+        .limit(1)
+        .then(({ error }) => {
+          if (error) return;
+          logsSub = supabase!
+            .channel('public:moderation_logs')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'moderation_logs' }, (payload) => {
+              if (payload.eventType === 'INSERT') {
+                setModerationLogs(prev => [payload.new as ModerationLog, ...prev]);
+              }
+            })
+            .subscribe();
+        });
 
       return () => {
         supabase!.removeChannel(articlesSub);
         supabase!.removeChannel(commentsSub);
-        supabase!.removeChannel(logsSub);
+        if (logsSub) supabase!.removeChannel(logsSub);
       };
 
     } else {
