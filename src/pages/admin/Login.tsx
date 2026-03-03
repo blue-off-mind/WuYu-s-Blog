@@ -8,18 +8,20 @@ import { toast } from "sonner";
 import { Header } from "@/components/layout/Header";
 
 export default function Login() {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { login } = useAuth();
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const [, setLocation] = useLocation();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (login(password)) {
+    const result = await login(email, password);
+    if (result.success) {
       toast.success("Welcome back, Editor.");
       setLocation("/admin");
     } else {
-      toast.error("Invalid credentials");
+      toast.error(result.message || "Invalid credentials");
     }
   };
 
@@ -32,23 +34,33 @@ export default function Login() {
             <h1 className="font-serif text-3xl font-bold">{t.admin.loginTitle}</h1>
             <p className="text-muted-foreground mt-2">{t.admin.loginSubtitle}</p>
           </div>
-          
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Input
+                type="email"
+                placeholder="admin@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Input
                 type="password"
-                placeholder={language === "en" ? "Password" : "密码"}
+                placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
                 className="font-serif tracking-widest"
+                required
               />
             </div>
             <Button type="submit" className="w-full">
               {t.admin.loginButton}
             </Button>
           </form>
-          
-          {/* Hint removed */}
         </div>
       </div>
     </div>

@@ -17,16 +17,16 @@ import {
 import { toast } from "sonner";
 
 export default function Comments() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isAdmin, isLoading } = useAuth();
   const { comments, articles, deleteComment } = useStore();
   const { t } = useLanguage();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isLoading && (!isAuthenticated || !isAdmin)) {
       setLocation("/admin/login");
     }
-  }, [isAuthenticated, setLocation]);
+  }, [isAuthenticated, isAdmin, isLoading, setLocation]);
 
   const handleDelete = async (id: string) => {
     if (confirm(t.comments.delete)) {
@@ -40,7 +40,7 @@ export default function Comments() {
     return article ? article.title : "Unknown Article";
   };
 
-  if (!isAuthenticated) return null;
+  if (isLoading || !isAuthenticated || !isAdmin) return null;
 
   return (
     <div className="min-h-screen bg-background">

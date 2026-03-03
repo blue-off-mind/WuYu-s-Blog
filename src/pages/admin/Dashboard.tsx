@@ -1,7 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useStore } from "@/contexts/StoreContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import {
 import { toast } from "sonner";
 
 export default function Dashboard() {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, isAdmin, isLoading, logout } = useAuth();
   const { articles, deleteArticle, isSupabaseEnabled, seedDatabase, connectionStatus } = useStore();
   const { t } = useLanguage();
   const [, setLocation] = useLocation();
@@ -33,10 +33,10 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isLoading && (!isAuthenticated || !isAdmin)) {
       setLocation("/admin/login");
     }
-  }, [isAuthenticated, setLocation]);
+  }, [isAuthenticated, isAdmin, isLoading, setLocation]);
 
   const handleDelete = (id: string) => {
     if (confirm("Are you sure you want to delete this article?")) {
@@ -45,7 +45,7 @@ export default function Dashboard() {
     }
   };
 
-  if (!isAuthenticated) return null;
+  if (isLoading || !isAuthenticated || !isAdmin) return null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -76,7 +76,7 @@ export default function Dashboard() {
             <Button variant="outline" onClick={() => setLocation("/admin/comments")}>
               <MessageSquare className="mr-2 w-4 h-4" /> {t.admin.commentsDashboard.title}
             </Button>
-             <Button variant="outline" onClick={() => { logout(); setLocation("/"); }}>
+             <Button variant="outline" onClick={async () => { await logout(); setLocation("/"); }}>
               <LogOut className="mr-2 w-4 h-4" /> {t.nav.logout}
             </Button>
             <Button onClick={() => setLocation("/admin/editor")}>
@@ -101,8 +101,8 @@ export default function Dashboard() {
             className="h-10 w-[180px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="All">{t.filter.all}</option>
-            {["Design", "Coding", "Life", "Music", "Tech"].map(c => (
-              <option key={c} value={c}>{t.filter.categories[c as any] || c}</option>
+            {["Design", "Coding", "Life", "Music", "Tech"].map((c) => (
+              <option key={c} value={c}>{t.filter.categories[c as keyof typeof t.filter.categories] || c}</option>
             ))}
           </select>
         </div>

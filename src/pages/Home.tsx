@@ -23,9 +23,9 @@ export default function Home() {
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary selection:text-primary-foreground">
       <Header />
       <Hero />
-      
-      <FilterBar 
-        activeCategory={activeCategory} 
+
+      <FilterBar
+        activeCategory={activeCategory}
         activeMood={activeMood}
         onCategoryChange={setActiveCategory}
         onMoodChange={setActiveMood}
@@ -41,8 +41,11 @@ export default function Home() {
         ) : (
           <div className="py-20 text-center">
             <h3 className="font-serif text-2xl text-muted-foreground italic">No stories found matching your mood.</h3>
-            <button 
-              onClick={() => { setActiveCategory("All"); setActiveMood("All"); }}
+            <button
+              onClick={() => {
+                setActiveCategory("All");
+                setActiveMood("All");
+              }}
               className="mt-4 text-sm font-bold uppercase tracking-widest underline decoration-2 underline-offset-4 hover:text-primary"
             >
               Reset Filters

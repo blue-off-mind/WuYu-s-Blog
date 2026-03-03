@@ -4,19 +4,107 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Header } from "@/components/layout/Header";
 import { motion } from "framer-motion";
-import { ArrowLeft, Clock, Tag, Heart } from "lucide-react";
+import { ArrowLeft, Clock } from "lucide-react";
 import { CommentSection } from "@/components/article/CommentSection";
 import { LikeButton } from "@/components/article/LikeButton";
 import { ModerationHistory } from "@/components/admin/ModerationHistory";
 import { useEffect } from "react";
 
+function sanitizeHtml(html: string) {
+  const template = document.createElement("template");
+  template.innerHTML = html;
+
+  const allowedTags = new Set([
+    "p",
+    "br",
+    "strong",
+    "em",
+    "b",
+    "i",
+    "u",
+    "blockquote",
+    "ul",
+    "ol",
+    "li",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "a",
+    "code",
+    "pre",
+  ]);
+  const allowedAttrs = new Map<string, Set<string>>([
+    ["a", new Set(["href", "target", "rel"])],
+  ]);
+
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      const tag = el.tagName.toLowerCase();
+
+      if (!allowedTags.has(tag)) {
+        const parent = el.parentNode;
+        if (parent) {
+          while (el.firstChild) parent.insertBefore(el.firstChild, el);
+          parent.removeChild(el);
+        }
+        return;
+      }
+
+      for (const attr of Array.from(el.attributes)) {
+        const attrName = attr.name.toLowerCase();
+        const isEventHandler = attrName.startsWith("on");
+        const isAllowed = allowedAttrs.get(tag)?.has(attrName) ?? false;
+        if (isEventHandler || !isAllowed) {
+          el.removeAttribute(attr.name);
+          continue;
+        }
+        if (tag === "a" && attrName === "href") {
+          const href = el.getAttribute("href") || "";
+          const safeHref =
+            href.startsWith("http://") ||
+            href.startsWith("https://") ||
+            href.startsWith("/") ||
+            href.startsWith("#");
+          if (!safeHref) {
+            el.removeAttribute("href");
+          }
+        }
+      }
+
+      if (tag === "a") {
+        if (el.getAttribute("target") === "_blank") {
+          el.setAttribute("rel", "noopener noreferrer");
+        } else {
+          el.removeAttribute("target");
+          el.removeAttribute("rel");
+        }
+      }
+    }
+
+    for (const child of Array.from(node.childNodes)) {
+      walk(child);
+    }
+  };
+
+  walk(template.content);
+  return template.innerHTML;
+}
+
 function processContent(content: string) {
-  // If content looks like HTML (has tags), return as is
   if (/<[a-z][\s\S]*>/i.test(content)) {
-    return content;
+    return sanitizeHtml(content);
   }
-  // Otherwise, treat as plain text: double newline = paragraph, single newline = br
-  return content
+
+  const escaped = content
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  return escaped
     .split(/\n\s*\n/)
     .filter((para) => para.trim().length > 0)
     .map((para) => `<p>${para.trim().replace(/\n/g, "<br />")}</p>`)
@@ -24,10 +112,10 @@ function processContent(content: string) {
 }
 
 export default function ArticleDetail() {
-  const [match, params] = useRoute("/article/:id");
+  const [, params] = useRoute("/article/:id");
   const [, setLocation] = useLocation();
-  const { getArticle, likeArticle } = useStore();
-  const { isAuthenticated } = useAuth();
+  const { getArticle, likeArticle, isInitialized } = useStore();
+  const { isAdmin } = useAuth();
   const { t } = useLanguage();
   
   const article = params?.id ? getArticle(params.id) : undefined;
@@ -36,6 +124,14 @@ export default function ArticleDetail() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading article...</p>
+      </div>
+    );
+  }
 
   if (!article) {
     return (
@@ -122,7 +218,7 @@ export default function ArticleDetail() {
             {/* Like Section */}
             <div className="flex justify-center my-12">
               <LikeButton 
-                likes={article.likes} 
+                likes={typeof article.likes === "number" ? article.likes : 0}
                 onClick={() => likeArticle(article.id)} 
                 label={t.article.likes} 
               />
@@ -136,7 +232,7 @@ export default function ArticleDetail() {
 
             <CommentSection articleId={article.id} />
             
-            {isAuthenticated && <ModerationHistory articleId={article.id} />}
+            {isAdmin && <ModerationHistory articleId={article.id} />}
           </div>
         </div>
       </motion.article>

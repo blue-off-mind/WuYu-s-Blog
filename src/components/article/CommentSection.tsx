@@ -30,7 +30,7 @@ export function CommentSection({ articleId }: CommentSectionProps) {
       author: author.trim() || "Anonymous Reader",
       content: content.trim(),
     });
-    
+
     setContent("");
     setAuthor("");
     toast.success(t.comments.success);
@@ -39,8 +39,7 @@ export function CommentSection({ articleId }: CommentSectionProps) {
   return (
     <div className="border-t border-border mt-16 pt-12 max-w-2xl mx-auto">
       <h3 className="font-serif text-2xl mb-8">{t.comments.title} ({comments.length})</h3>
-      
-      {/* List */}
+
       <div className="space-y-8 mb-12">
         {comments.length === 0 ? (
           <p className="text-muted-foreground italic text-sm">{t.comments.empty}</p>
@@ -51,7 +50,7 @@ export function CommentSection({ articleId }: CommentSectionProps) {
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-xs uppercase tracking-widest">{comment.author}</span>
                   <span className="text-[10px] text-muted-foreground uppercase tracking-widest">
-                    {new Date(comment.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} • {new Date(comment.createdAt).toLocaleTimeString("en-US", { hour: '2-digit', minute:'2-digit' })}
+                    {new Date(comment.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} - {new Date(comment.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                   </span>
                   {isAuthenticated && (
                     <button
@@ -75,26 +74,25 @@ export function CommentSection({ articleId }: CommentSectionProps) {
         )}
       </div>
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="bg-muted/30 p-6 border border-border/50">
         <h4 className="font-bold text-xs uppercase tracking-widest mb-4 text-muted-foreground">{t.comments.formTitle}</h4>
         <div className="space-y-4">
           <div>
             <Label htmlFor="author" className="sr-only">Name</Label>
-            <Input 
+            <Input
               id="author"
-              placeholder={t.comments.namePlaceholder} 
-              value={author} 
+              placeholder={t.comments.namePlaceholder}
+              value={author}
               onChange={(e) => setAuthor(e.target.value)}
               className="bg-background border-border focus-visible:ring-1"
             />
           </div>
           <div>
-             <Label htmlFor="comment" className="sr-only">Comment</Label>
-            <Textarea 
+            <Label htmlFor="comment" className="sr-only">Comment</Label>
+            <Textarea
               id="comment"
-              placeholder={t.comments.commentPlaceholder} 
-              value={content} 
+              placeholder={t.comments.commentPlaceholder}
+              value={content}
               onChange={(e) => setContent(e.target.value)}
               className="min-h-[100px] bg-background border-border font-serif resize-none focus-visible:ring-1"
               required

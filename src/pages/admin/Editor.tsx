@@ -13,10 +13,10 @@ import { toast } from "sonner";
 import type { Article, Category, Mood } from "@/lib/types";
 
 export default function Editor() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isAdmin, isLoading } = useAuth();
   const { getArticle, addArticle, updateArticle } = useStore();
   const { t } = useLanguage();
-  const [match, params] = useRoute("/admin/editor/:id?");
+  const [, params] = useRoute("/admin/editor/:id?");
   const [, setLocation] = useLocation();
   const isEditing = !!params?.id;
 
@@ -33,7 +33,7 @@ export default function Editor() {
   });
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isLoading && (!isAuthenticated || !isAdmin)) {
       setLocation("/admin/login");
       return;
     }
@@ -47,7 +47,7 @@ export default function Editor() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, isEditing, params?.id, setLocation]);
+  }, [isAuthenticated, isAdmin, isLoading, isEditing, params?.id, setLocation]);
 
   const handleChange = (field: keyof Article, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -70,7 +70,7 @@ export default function Editor() {
     }
   };
 
-  if (!isAuthenticated) return null;
+  if (isLoading || !isAuthenticated || !isAdmin) return null;
 
   return (
     <div className="min-h-screen bg-background pb-20">

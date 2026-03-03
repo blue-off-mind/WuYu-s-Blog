@@ -6,7 +6,8 @@ export type Language = "en" | "zh";
 export const TRANSLATIONS = {
   en: {
     title: "Starry\nIsle\nEditorials",
-    subtitle: "Dwelling on Starry Isle, in silent dreams, we capture the shimmering flow of thought.",
+    subtitle:
+      "Dwelling on Starry Isle, in silent dreams, we capture the shimmering flow of thought.",
     est: "Designed by Starry",
     nav: {
       journal: "Journal",
@@ -31,9 +32,9 @@ export const TRANSLATIONS = {
         "Deep Focus": "Deep Focus",
         "Sunday Morning": "Sunday Morning",
         "Late Night": "Late Night",
-        "Nostalgic": "Nostalgic",
-        "Sharp": "Sharp",
-        "Energetic": "Energetic",
+        Nostalgic: "Nostalgic",
+        Sharp: "Sharp",
+        Energetic: "Energetic",
       },
     },
     article: {
@@ -96,20 +97,20 @@ export const TRANSLATIONS = {
         content: "Content Snapshot",
         moderator: "Moderator",
         time: "Time",
-        empty: "No moderation history recorded for this article."
-      }
-    }
+        empty: "No moderation history recorded for this article.",
+      },
+    },
   },
   zh: {
     title: "星岛\n社论\n日志",
-    subtitle: "栖于星岛，在静谧梦境里，记取思想的流光。",
-    est: "Designed by 星岛的夜",
+    subtitle: "栖于星岛，在静谧梦境里，记录思想流光。",
+    est: "Designed by 星岛之夜",
     nav: {
       journal: "期刊",
       about: "关于",
       admin: "管理",
       login: "登录",
-      logout: "登出",
+      logout: "退出",
     },
     filter: {
       label: "筛选：",
@@ -118,18 +119,18 @@ export const TRANSLATIONS = {
       empty: "没有找到符合当前心境的文章。",
       categories: {
         Design: "设计",
-        Coding: "代码",
+        Coding: "编码",
         Life: "生活",
         Music: "音乐",
         Tech: "科技",
       },
       moods: {
-        "Deep Focus": "深度聚焦",
+        "Deep Focus": "深度专注",
         "Sunday Morning": "周日清晨",
         "Late Night": "深夜",
-        "Nostalgic": "怀旧",
-        "Sharp": "犀利",
-        "Energetic": "活力",
+        Nostalgic: "怀旧",
+        Sharp: "犀利",
+        Energetic: "活力",
       },
     },
     article: {
@@ -137,15 +138,15 @@ export const TRANSLATIONS = {
       back: "返回",
       by: "作者",
       editorNote: "编者按",
-      likes: "人点赞",
-      published: "发布于",
+      likes: "点赞",
+      published: "发布时间",
     },
     comments: {
       title: "讨论区",
-      empty: "暂无评论。期待您的第一条见解。",
-      formTitle: "分享您的观点",
-      namePlaceholder: "您的昵称（可选）",
-      commentPlaceholder: "写下您的想法...",
+      empty: "暂无评论，期待你的第一条观点。",
+      formTitle: "分享你的观点",
+      namePlaceholder: "你的昵称（可选）",
+      commentPlaceholder: "写下你的想法...",
       submit: "发布观点",
       success: "评论已发布。",
       delete: "确定删除这条评论吗？",
@@ -153,10 +154,10 @@ export const TRANSLATIONS = {
     },
     admin: {
       loginTitle: "编辑入口",
-      loginSubtitle: "请输入凭证以继续。",
+      loginSubtitle: "请输入账号凭证继续。",
       loginButton: "进入内容管理系统",
       dashboard: "CMS 仪表盘",
-      manage: "管理您的编辑内容",
+      manage: "管理你的编辑内容",
       newArticle: "新建文章",
       initDb: "初始化数据库",
       edit: "编辑文章",
@@ -167,16 +168,16 @@ export const TRANSLATIONS = {
       title: "标题",
       author: "作者",
       category: "分类",
-      mood: "心境",
+      mood: "情绪",
       context: "最佳阅读场景",
-      pullQuote: "金句",
+      pullQuote: "引言",
       content: "内容",
       published: "发布时间",
       actions: "操作",
       searchPlaceholder: "搜索文章...",
       commentsDashboard: {
         title: "评论审核",
-        subtitle: "集中管理所有文章的讨论内容",
+        subtitle: "集中管理所有文章评论内容",
         article: "所属文章",
         author: "发布者",
         comment: "评论内容",
@@ -187,15 +188,15 @@ export const TRANSLATIONS = {
       },
       moderationLog: {
         title: "审核历史",
-        subtitle: "已删除评论的审计追踪",
+        subtitle: "已删除评论的审计轨迹",
         action: "操作",
         content: "内容快照",
         moderator: "操作人",
         time: "时间",
-        empty: "本文暂无审核记录。"
-      }
-    }
-  }
+        empty: "本文暂无审核记录。",
+      },
+    },
+  },
 };
 
 interface LanguageContextType {
@@ -217,7 +218,6 @@ export function useLanguage() {
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>("en");
 
-  // Update CSS variables for fonts when language changes
   useEffect(() => {
     const root = document.documentElement;
     if (language === "zh") {

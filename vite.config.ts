@@ -3,19 +3,21 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react({
-      babel: {
-        plugins: [
-          // Inject data-source attribute for AI agent source location
-          "./scripts/babel-plugin-jsx-source-location.cjs",
-        ],
-      },
+      babel:
+        mode === "development"
+          ? {
+              plugins: [
+                "./scripts/babel-plugin-jsx-source-location.cjs",
+              ],
+            }
+          : undefined,
     }),
     tailwindcss(),
   ],
   resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
   base: "./",
   build: { outDir: "dist", emptyOutDir: true },
-});
+}));

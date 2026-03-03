@@ -9,13 +9,12 @@ interface LikeButtonProps {
 }
 
 export function LikeButton({ likes, onClick, label }: LikeButtonProps) {
-  const [isBursting, setIsBursting] = useState(false);
+  const [burstKey, setBurstKey] = useState(0);
 
   const handleClick = () => {
     onClick();
-    // Trigger animation state
-    setIsBursting(false); 
-    setTimeout(() => setIsBursting(true), 10); // Re-trigger to allow rapid clicks
+    // Force remount to reliably replay burst on rapid consecutive clicks.
+    setBurstKey((prev) => prev + 1);
   };
 
   return (
@@ -25,9 +24,10 @@ export function LikeButton({ likes, onClick, label }: LikeButtonProps) {
     >
       <div className="relative">
         <motion.div
+          key={`heart-${burstKey}`}
           whileTap={{ scale: 0.8 }}
-          animate={isBursting ? { scale: [1, 1.5, 1], rotate: [0, -10, 10, 0] } : {}}
-          transition={{ duration: 0.5, type: "spring", stiffness: 300, damping: 15 }}
+          animate={burstKey > 0 ? { scale: [1, 1.5, 1], rotate: [0, -10, 10, 0] } : {}}
+          transition={{ duration: 0.5, ease: "easeOut" }}
           className="p-4 rounded-full bg-muted border border-border group-hover:border-primary/50 group-hover:bg-primary/5 transition-colors relative z-10"
         >
           <Heart 
@@ -36,8 +36,8 @@ export function LikeButton({ likes, onClick, label }: LikeButtonProps) {
         </motion.div>
         
         {/* Particle Burst System */}
-        <AnimatePresence>
-          {isBursting && Array.from({ length: 12 }).map((_, i) => {
+        <AnimatePresence mode="popLayout">
+          {burstKey > 0 && Array.from({ length: 12 }).map((_, i) => {
             const angle = (i * 30); // 360 / 12 = 30 degrees step
             const radius = 60; // Burst radius
             const radian = (angle * Math.PI) / 180;
@@ -46,13 +46,13 @@ export function LikeButton({ likes, onClick, label }: LikeButtonProps) {
             
             return (
               <motion.div
-                key={i}
+                key={`particle-${burstKey}-${i}`}
                 initial={{ x: 0, y: 0, opacity: 1, scale: 0.2 }}
                 animate={{ 
                   x, 
                   y, 
                   opacity: 0, 
-                  scale: Math.random() * 0.5 + 0.5 // Random particle sizes
+                  scale: 0.5 + (i % 3) * 0.15
                 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.6, ease: "easeOut" }}

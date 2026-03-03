@@ -1,10 +1,13 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
+import { supabase } from "@/lib/supabase";
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  login: (password: string) => boolean;
-  logout: () => void;
+  isAdmin: boolean;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,30 +22,82 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoading, setIsLoading] = useState(!!supabase);
 
   useEffect(() => {
-    const storedAuth = localStorage.getItem("dej_auth");
-    if (storedAuth === "true") {
-      setIsAuthenticated(true);
+    if (!supabase) {
+      return;
     }
+    const client = supabase;
+
+    const syncRole = async () => {
+      const { data, error } = await client.rpc("is_admin");
+      if (error) {
+        console.error("Failed to resolve admin role:", error);
+        setIsAdmin(false);
+        return;
+      }
+      setIsAdmin(!!data);
+    };
+
+    client.auth.getSession().then(async ({ data, error }) => {
+      if (error) {
+        console.error("Failed to load auth session:", error);
+      }
+      const authed = !!data.session;
+      setIsAuthenticated(authed);
+      if (authed) {
+        await syncRole();
+      } else {
+        setIsAdmin(false);
+      }
+      setIsLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange(async (_event, session) => {
+      const authed = !!session;
+      setIsAuthenticated(authed);
+      if (authed) {
+        await syncRole();
+      } else {
+        setIsAdmin(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const login = (password: string) => {
-    if (password === "admin0801") {
-      setIsAuthenticated(true);
-      localStorage.setItem("dej_auth", "true");
-      return true;
+  const login = async (email: string, password: string) => {
+    if (!supabase) {
+      return {
+        success: false,
+        message: "Supabase is not configured.",
+      };
     }
-    return false;
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      return { success: false, message: error.message };
+    }
+
+    return { success: true };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
     setIsAuthenticated(false);
-    localStorage.removeItem("dej_auth");
+    setIsAdmin(false);
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isAdmin, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,7 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Hardcoded for stability in this environment
-const supabaseUrl = "https://vcufajttjjflkmfkfikv.supabase.co";
-const supabaseAnonKey = "sb_publishable_AruvHor89jwu7mXbCvIiaw_uqMzkXDq";
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+if (!isSupabaseConfigured) {
+  console.warn(
+    "Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.",
+  );
+}
+
+export const supabase = isSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
+
+export { isSupabaseConfigured };

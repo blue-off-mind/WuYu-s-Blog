@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import type { ReactNode } from "react";
 import type { Article, Comment, ModerationLog } from "@/lib/types";
 import { nanoid } from "nanoid";
@@ -10,6 +10,7 @@ import { SEED_ARTICLES } from "@/lib/seed";
 interface StoreContextType {
   articles: Article[];
   comments: Comment[];
+  isInitialized: boolean;
   addArticle: (article: Omit<Article, "id" | "publishedAt">) => Promise<void>;
   updateArticle: (id: string, article: Partial<Article>) => Promise<void>;
   deleteArticle: (id: string) => Promise<void>;
@@ -41,10 +42,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [moderationLogs, setModerationLogs] = useState<ModerationLog[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
   
-  const likeTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const pendingLikes = useRef<Record<string, number>>({});
+  const normalizeArticle = (article: Partial<Article>): Partial<Article> => ({
+    ...article,
+    likes: typeof article.likes === "number" ? article.likes : Number(article.likes ?? 0),
+  });
+
+  const hydrateArticleById = useCallback(async (id: string) => {
+    if (!supabase) return;
+    const { data, error } = await supabase.from("articles").select("*").eq("id", id).single();
+    if (error || !data) return;
+    const hydrated = normalizeArticle(data as Partial<Article>) as Article;
+    setArticles((prev) => prev.map((article) => (article.id === id ? hydrated : article)));
+  }, []);
 
   // Use Supabase if client is initialized
   const isSupabaseEnabled = !!supabase;
@@ -75,9 +87,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         if (comError) console.error("Error fetching comments:", comError);
 
-        if (dbArticles) setArticles(dbArticles as Article[]);
+        if (dbArticles) {
+          setArticles((dbArticles as Article[]).map((article) => normalizeArticle(article) as Article));
+        }
         if (dbComments) setComments(dbComments as Comment[]);
         if (dbLogs) setModerationLogs(dbLogs as ModerationLog[]);
+        setIsInitialized(true);
       };
 
       fetchSupabaseData();
@@ -87,9 +102,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .channel('public:articles')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'articles' }, (payload) => {
           if (payload.eventType === 'INSERT') {
-            setArticles(prev => [payload.new as Article, ...prev]);
+            const incoming = normalizeArticle(payload.new as Partial<Article>) as Article;
+            setArticles(prev => [incoming, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
-            setArticles(prev => prev.map(a => a.id === payload.new.id ? payload.new as Article : a));
+            const rowId = String(payload.new.id ?? "");
+            const incomingLikes = Number((payload.new as Partial<Article>).likes ?? NaN);
+            setArticles((prev) =>
+              prev.map((article) => {
+                if (article.id !== rowId) return article;
+                // Only trust likes from realtime payload; then hydrate full row from DB.
+                return {
+                  ...article,
+                  likes: Number.isFinite(incomingLikes) ? incomingLikes : (article.likes || 0),
+                };
+              }),
+            );
+            if (rowId) void hydrateArticleById(rowId);
           } else if (payload.eventType === 'DELETE') {
             setArticles(prev => prev.filter(a => a.id !== payload.old.id));
           }
@@ -127,8 +155,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const storedArticles = localStorage.getItem("dej_articles");
       if (storedArticles) {
         try {
-          const parsed = JSON.parse(storedArticles);
-          setArticles(parsed.map((a: any) => ({ ...a, likes: a.likes || 0 })));
+          const parsed = JSON.parse(storedArticles) as Partial<Article>[];
+          setArticles(parsed.map((a) => ({ ...(a as Article), likes: Number(a.likes ?? 0) })));
         } catch { setArticles(SEED_ARTICLES); }
       } else {
         setArticles(SEED_ARTICLES);
@@ -148,8 +176,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setModerationLogs(JSON.parse(storedLogs));
         } catch { setModerationLogs([]); }
       }
+      setConnectionStatus('connected');
+      setIsInitialized(true);
     }
-  }, [isSupabaseEnabled]);
+  }, [isSupabaseEnabled, hydrateArticleById]);
 
   // Sync to LocalStorage (Only in Local Mode)
   useEffect(() => {
@@ -208,61 +238,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   const likeArticle = async (id: string) => {
-    // 1. Optimistic Update (Immediate)
     setArticles((prev) =>
       prev.map((art) => (art.id === id ? { ...art, likes: (art.likes || 0) + 1 } : art))
     );
 
-    // 2. Track accumulated clicks
-    pendingLikes.current[id] = (pendingLikes.current[id] || 0) + 1;
+    if (!isSupabaseEnabled) return;
 
-    // 3. Debounce Network Request
-    if (likeTimeouts.current[id]) {
-      clearTimeout(likeTimeouts.current[id]);
+    try {
+      const { error } = await supabase!.rpc("increment_article_likes", {
+        p_article_id: id,
+      });
+      if (error) throw error;
+    } catch (err) {
+      console.error("Failed to sync likes:", err);
+      toast.error("Failed to save like. Reverting.");
+      setArticles((prev) =>
+        prev.map((art) => (art.id === id ? { ...art, likes: Math.max((art.likes || 1) - 1, 0) } : art))
+      );
     }
-
-    likeTimeouts.current[id] = setTimeout(async () => {
-      const count = pendingLikes.current[id];
-      pendingLikes.current[id] = 0; // Reset pending
-      
-      console.log('Syncing to Supabase:', id, 'Count:', count);
-
-      if (!isSupabaseEnabled) {
-        console.warn("Supabase sync skipped: Client not enabled");
-        return; 
-      }
-
-      try {
-        // Fetch latest to ensure atomic-like consistency
-        const { data: currentArt, error: fetchError } = await supabase!
-          .from("articles")
-          .select("likes")
-          .eq("id", id)
-          .single();
-
-        if (fetchError) throw fetchError;
-
-        const newLikes = (currentArt?.likes || 0) + count;
-
-        const { error: updateError } = await supabase!
-          .from("articles")
-          .update({ likes: newLikes })
-          .eq("id", id);
-
-        if (updateError) throw updateError;
-        
-        console.log("Supabase sync success for article:", id);
-      } catch (err) {
-        console.error("Failed to sync likes:", err);
-        toast.error("Failed to save like. Reverting.");
-        // Revert local state
-        setArticles((prev) =>
-          prev.map((art) => (art.id === id ? { ...art, likes: (art.likes || 0) - count } : art))
-        );
-      } finally {
-        delete likeTimeouts.current[id];
-      }
-    }, 1000); 
   };
 
   const seedDatabase = async () => {
@@ -324,6 +317,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       value={{ 
         articles, 
         comments, 
+        isInitialized,
         addArticle, 
         updateArticle, 
         deleteArticle, 

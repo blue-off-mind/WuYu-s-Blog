@@ -11,14 +11,29 @@ create table if not exists public.moderation_logs (
 -- Enable RLS
 alter table public.moderation_logs enable row level security;
 
--- Policies
-create policy "Moderation logs are viewable by everyone"
-  on public.moderation_logs for select
-  using ( true );
+-- Reset policies for idempotent reruns
+drop policy if exists "Admins can view moderation logs" on public.moderation_logs;
+drop policy if exists "Admins can insert moderation logs" on public.moderation_logs;
 
-create policy "Moderation logs are insertable by everyone"
+-- Policies
+create policy "Admins can view moderation logs"
+  on public.moderation_logs for select
+  using (public.is_admin());
+
+create policy "Admins can insert moderation logs"
   on public.moderation_logs for insert
-  with check ( true );
+  with check (public.is_admin());
 
 -- Enable Realtime
-alter publication supabase_realtime add table public.moderation_logs;
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'moderation_logs'
+  ) then
+    alter publication supabase_realtime add table public.moderation_logs;
+  end if;
+end $$;
