@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -52,6 +52,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(!!supabase);
+  const isAuthenticatedRef = useRef(isAuthenticated);
+  const isAdminRef = useRef(isAdmin);
+
+  useEffect(() => {
+    isAuthenticatedRef.current = isAuthenticated;
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    isAdminRef.current = isAdmin;
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!supabase) {
@@ -82,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAdmin(false);
     };
 
-    const syncRole = async () => {
+    const syncRole = async (preserveOnTransientFailure = true) => {
       const roleResult = await Promise.race([
         Promise.resolve(client.rpc("is_admin")),
         new Promise<null>((resolve) => {
@@ -93,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }),
       ]);
       if (roleResult === null) {
-        if (active) setIsAdmin(false);
+        if (active && !preserveOnTransientFailure) setIsAdmin(false);
         return;
       }
       const { data, error } = roleResult;
@@ -102,8 +112,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("Failed to resolve admin role:", error);
         if (isTokenError(error.message)) {
           await clearInvalidSession();
+          return;
         }
-        setIsAdmin(false);
+        if (!preserveOnTransientFailure) {
+          setIsAdmin(false);
+        }
         return;
       }
       setIsAdmin(!!data);
@@ -120,6 +133,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error("Failed to load auth session:", error);
           if (isTokenError(error.message)) {
             await clearInvalidSession();
+            return;
+          }
+          // Keep prior auth/admin state on transient failures (e.g. tab freeze wake-up).
+          if (isAuthenticatedRef.current) {
+            setIsAuthenticated(true);
+            setIsAdmin(isAdminRef.current);
+            return;
           }
         }
         const authed = !!data.session;
@@ -132,8 +152,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (isTokenError(userError.message)) {
               await clearInvalidSession();
             } else {
-              setIsAuthenticated(false);
-              setIsAdmin(false);
+              // Network hiccups should not immediately kick admins out of active sessions.
+              setIsAuthenticated(isAuthenticatedRef.current);
+              setIsAdmin(isAdminRef.current);
             }
             return;
           }
@@ -161,6 +182,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(true);
       }
       try {
+        if (!session && (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") && isAuthenticatedRef.current) {
+          setIsAuthenticated(true);
+          setIsAdmin(isAdminRef.current);
+          return;
+        }
         const authed = !!session;
         setIsAuthenticated(authed);
         if (authed) {

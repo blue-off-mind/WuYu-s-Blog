@@ -87,7 +87,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           readClient.from("comments").select("*").order("createdAt", { ascending: false }),
         ]);
 
-        let { data: dbArticles, error: artError } = articlesResult;
+        const { data: dbArticles, error: artError } = articlesResult;
         const { data: dbComments, error: comError } = commentsResult;
 
         if (!active) return;
