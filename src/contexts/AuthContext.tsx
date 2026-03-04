@@ -58,16 +58,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     const client = supabase;
+    let active = true;
+    const TIMEOUT_MS = 5000;
+
+    const withTimeout = async <T,>(promise: PromiseLike<T>, fallbackValue: T, label: string): Promise<T> => {
+      let timeoutId: number | undefined;
+      const timeoutPromise = new Promise<T>((resolve) => {
+        timeoutId = window.setTimeout(() => {
+          console.warn(`${label} timed out after ${TIMEOUT_MS}ms`);
+          resolve(fallbackValue);
+        }, TIMEOUT_MS);
+      });
+      const result = await Promise.race([Promise.resolve(promise), timeoutPromise]);
+      if (timeoutId) window.clearTimeout(timeoutId);
+      return result;
+    };
 
     const clearInvalidSession = async () => {
       await client.auth.signOut().catch(() => undefined);
       clearSupabaseAuthStorage();
+      if (!active) return;
       setIsAuthenticated(false);
       setIsAdmin(false);
     };
 
     const syncRole = async () => {
-      const { data, error } = await client.rpc("is_admin");
+      const roleResult = await Promise.race([
+        Promise.resolve(client.rpc("is_admin")),
+        new Promise<null>((resolve) => {
+          window.setTimeout(() => {
+            console.warn(`is_admin() timed out after ${TIMEOUT_MS}ms`);
+            resolve(null);
+          }, TIMEOUT_MS);
+        }),
+      ]);
+      if (roleResult === null) {
+        if (active) setIsAdmin(false);
+        return;
+      }
+      const { data, error } = roleResult;
+      if (!active) return;
       if (error) {
         console.error("Failed to resolve admin role:", error);
         if (isTokenError(error.message)) {
@@ -79,48 +109,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAdmin(!!data);
     };
 
-    client.auth.getSession().then(async ({ data, error }) => {
-      if (error) {
-        console.error("Failed to load auth session:", error);
-        if (isTokenError(error.message)) {
-          await clearInvalidSession();
-        }
-      }
-      const authed = !!data.session;
-      setIsAuthenticated(authed);
-      if (authed) {
-        const { error: userError } = await client.auth.getUser();
-        if (userError) {
-          console.error("Failed to validate auth session:", userError);
-          if (isTokenError(userError.message)) {
+    withTimeout(
+      client.auth.getSession(),
+      { data: { session: null }, error: null },
+      "auth.getSession()",
+    )
+      .then(async ({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.error("Failed to load auth session:", error);
+          if (isTokenError(error.message)) {
             await clearInvalidSession();
-          } else {
-            setIsAuthenticated(false);
-            setIsAdmin(false);
           }
-          setIsLoading(false);
-          return;
         }
-        await syncRole();
-      } else {
-        setIsAdmin(false);
-      }
-      setIsLoading(false);
-    });
+        const authed = !!data.session;
+        if (!active) return;
+        setIsAuthenticated(authed);
+        if (authed) {
+          const { error: userError } = await client.auth.getUser();
+          if (userError) {
+            console.error("Failed to validate auth session:", userError);
+            if (isTokenError(userError.message)) {
+              await clearInvalidSession();
+            } else {
+              setIsAuthenticated(false);
+              setIsAdmin(false);
+            }
+            return;
+          }
+          await syncRole();
+        } else {
+          setIsAdmin(false);
+        }
+      })
+      .finally(() => {
+        if (!active) return;
+        setIsLoading(false);
+      });
 
     const {
       data: { subscription },
-    } = client.auth.onAuthStateChange(async (_event, session) => {
-      const authed = !!session;
-      setIsAuthenticated(authed);
-      if (authed) {
-        await syncRole();
-      } else {
+    } = client.auth.onAuthStateChange(async (event, session) => {
+      if (!active) return;
+      if (event === "SIGNED_OUT") {
+        setIsAuthenticated(false);
         setIsAdmin(false);
+        setIsLoading(false);
+        return;
+      }
+      if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+        setIsLoading(true);
+      }
+      try {
+        const authed = !!session;
+        setIsAuthenticated(authed);
+        if (authed) {
+          await syncRole();
+        } else {
+          setIsAdmin(false);
+        }
+      } finally {
+        if (active) setIsLoading(false);
       }
     });
 
     return () => {
+      active = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -133,12 +187,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
     }
 
+    setIsLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
+      setIsLoading(false);
       return { success: false, message: error.message };
     }
 
+    let timeoutId: number | undefined;
+    const timeoutPromise = new Promise<{ data: boolean; error: { message: string } | null }>((resolve) => {
+      timeoutId = window.setTimeout(() => resolve({ data: false, error: null }), 5000);
+    });
+    const { data: adminData, error: adminError } = await Promise.race([
+      Promise.resolve(supabase.rpc("is_admin")),
+      timeoutPromise,
+    ]);
+    if (timeoutId) window.clearTimeout(timeoutId);
+    if (adminError) {
+      console.error("Failed to resolve admin role after login:", adminError);
+      setIsAuthenticated(false);
+      setIsAdmin(false);
+      setIsLoading(false);
+      return { success: false, message: adminError?.message || "Failed to resolve admin role." };
+    }
+
+    if (!adminData) {
+      await supabase.auth.signOut();
+      setIsAuthenticated(false);
+      setIsAdmin(false);
+      setIsLoading(false);
+      return { success: false, message: "This account is not an admin user." };
+    }
+
+    setIsAuthenticated(true);
+    setIsAdmin(true);
+    setIsLoading(false);
     return { success: true };
   };
 

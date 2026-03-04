@@ -14,4 +14,17 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
+// Public data client: never persists/recovers auth session from browser storage.
+// Use this for public reads and public RPCs to avoid stale user-token side effects.
+export const supabasePublic = isSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storageKey: "sb-public-readonly-auth-token",
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    })
+  : null;
+
 export { isSupabaseConfigured };

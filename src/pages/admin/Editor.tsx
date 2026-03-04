@@ -70,7 +70,20 @@ export default function Editor() {
     }
   };
 
-  if (isLoading || !isAuthenticated || !isAdmin) return null;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        Checking admin session...
+      </div>
+    );
+  }
+  if (!isAuthenticated || !isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        Redirecting to login...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20">

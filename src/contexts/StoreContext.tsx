@@ -3,27 +3,10 @@ import type { ReactNode } from "react";
 import type { Article, Comment, ModerationLog } from "@/lib/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { nanoid } from "nanoid";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabasePublic } from "@/lib/supabase";
 import { toast } from "sonner";
 
 import { SEED_ARTICLES } from "@/lib/seed";
-
-const clearSupabaseAuthStorage = () => {
-  if (typeof window === "undefined") return;
-  const clear = (storage: Storage) => {
-    const keysToDelete: string[] = [];
-    for (let i = 0; i < storage.length; i += 1) {
-      const key = storage.key(i);
-      if (!key) continue;
-      if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
-        keysToDelete.push(key);
-      }
-    }
-    keysToDelete.forEach((key) => storage.removeItem(key));
-  };
-  clear(window.localStorage);
-  clear(window.sessionStorage);
-};
 
 interface StoreContextType {
   articles: Article[];
@@ -77,15 +60,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   const hydrateArticleById = useCallback(async (id: string) => {
-    if (!supabase) return;
-    const { data, error } = await supabase.from("articles").select("*").eq("id", id).single();
+    const client = supabasePublic ?? supabase;
+    if (!client) return;
+    const { data, error } = await client.from("articles").select("*").eq("id", id).single();
     if (error || !data) return;
     const hydrated = normalizeArticle(data as Partial<Article>) as Article;
     setArticles((prev) => prev.map((article) => (article.id === id ? hydrated : article)));
   }, []);
 
   // Use Supabase if client is initialized
-  const isSupabaseEnabled = !!supabase;
+  const isSupabaseEnabled = !!(supabasePublic ?? supabase);
 
   // --- INITIALIZATION ---
   useEffect(() => {
@@ -94,40 +78,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     if (isSupabaseEnabled) {
       let active = true;
+      const readClient = supabasePublic ?? supabase;
+      if (!readClient) return;
       // Supabase Mode
       const fetchSupabaseData = async () => {
-        const [
-          articlesResult,
-          commentsResult,
-          logsResult,
-        ] = await Promise.all([
-          supabase!.from("articles").select("*").order("publishedAt", { ascending: false }),
-          supabase!.from("comments").select("*").order("createdAt", { ascending: false }),
-          supabase!.from("moderation_logs").select("*").order("createdAt", { ascending: false }),
+        const [articlesResult, commentsResult] = await Promise.all([
+          readClient.from("articles").select("*").order("publishedAt", { ascending: false }),
+          readClient.from("comments").select("*").order("createdAt", { ascending: false }),
         ]);
 
         let { data: dbArticles, error: artError } = articlesResult;
         const { data: dbComments, error: comError } = commentsResult;
-        const { data: dbLogs, error: logsError } = logsResult;
-
-        const maybeJwtError = (artError?.message || "").toLowerCase();
-        if (
-          artError &&
-          (maybeJwtError.includes("jwt") ||
-            maybeJwtError.includes("token") ||
-            maybeJwtError.includes("auth session"))
-        ) {
-          // Recover from stale client tokens after deployment/session edge cases.
-          try {
-            await supabase!.auth.signOut();
-          } catch {
-            // noop
-          }
-          clearSupabaseAuthStorage();
-          const retry = await supabase!.from("articles").select("*").order("publishedAt", { ascending: false });
-          dbArticles = retry.data;
-          artError = retry.error;
-        }
 
         if (!active) return;
 
@@ -146,22 +107,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (comError && !isAbortLikeError(comError)) {
           console.error("Error fetching comments:", comError);
         }
-        if (logsError && !isAbortLikeError(logsError)) {
-          console.warn("Moderation logs unavailable:", logsError.message);
-        }
 
         if (dbArticles) {
           setArticles((dbArticles as Article[]).map((article) => normalizeArticle(article) as Article));
         }
         if (dbComments) setComments(dbComments as Comment[]);
-        if (dbLogs) setModerationLogs(dbLogs as ModerationLog[]);
         setIsInitialized(true);
+
+        // Moderation logs are admin-only and must never block public/app initialization.
+        void (async () => {
+          try {
+            const { data: dbLogs, error: logsError } = await supabase!
+              .from("moderation_logs")
+              .select("*")
+              .order("createdAt", { ascending: false });
+            if (!active) return;
+            if (logsError) {
+              if (!isAbortLikeError(logsError)) {
+                console.warn("Moderation logs unavailable:", logsError.message);
+              }
+              return;
+            }
+            if (dbLogs) setModerationLogs(dbLogs as ModerationLog[]);
+          } catch (error) {
+            if (!isAbortLikeError(error)) {
+              console.warn("Moderation logs fetch failed:", error);
+            }
+          }
+        })();
       };
 
       fetchSupabaseData();
 
       // Realtime Subscriptions
-      const articlesSub = supabase!
+      const articlesSub = readClient
         .channel('public:articles')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'articles' }, (payload) => {
           if (payload.eventType === 'INSERT') {
@@ -187,7 +166,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
         .subscribe();
 
-      const commentsSub = supabase!
+      const commentsSub = readClient
         .channel('public:comments')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, (payload) => {
           if (payload.eventType === 'INSERT') {
@@ -220,8 +199,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       return () => {
         active = false;
-        supabase!.removeChannel(articlesSub);
-        supabase!.removeChannel(commentsSub);
+        readClient.removeChannel(articlesSub);
+        readClient.removeChannel(commentsSub);
         if (logsSub) supabase!.removeChannel(logsSub);
       };
 
@@ -317,10 +296,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       prev.map((art) => (art.id === id ? { ...art, likes: (art.likes || 0) + 1 } : art))
     );
 
-    if (!isSupabaseEnabled) return;
+    const rpcClient = supabasePublic ?? supabase;
+    if (!rpcClient) return;
 
     try {
-      const { error } = await supabase!.rpc("increment_article_likes", {
+      const { error } = await rpcClient.rpc("increment_article_likes", {
         p_article_id: id,
       });
       if (error) throw error;
