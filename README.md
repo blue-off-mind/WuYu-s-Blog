@@ -1,5 +1,5 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![CI](https://github.com/Sherlock/digital-editorial-journal/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/WuYu/WuYu-s-Blog/actions/workflows/ci.yml/badge.svg)
  # Digital Editorial Journal
 
 A React + Vite + Supabase digital editorial project with public reading, comments, admin CMS, moderation logs, and realtime sync.
