@@ -45,6 +45,23 @@ export function ImagePicker({ onSelect, currentUrl }: ImagePickerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [customUrl, setCustomUrl] = useState("");
 
+  const getSafeImageUrl = (value: string): string => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return "";
+
+    try {
+      const parsedUrl = new URL(trimmedValue);
+      if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+        return "";
+      }
+      return parsedUrl.toString();
+    } catch {
+      return "";
+    }
+  };
+
+  const safeCustomUrl = getSafeImageUrl(customUrl);
+
   const filteredImages = CURATED_IMAGES.filter(img => 
     img.category.toLowerCase().includes(searchQuery.toLowerCase()) || 
     img.alt.toLowerCase().includes(searchQuery.toLowerCase())
@@ -130,8 +147,13 @@ export function ImagePicker({ onSelect, currentUrl }: ImagePickerProps) {
                 placeholder="Paste image URL here..."
                 value={customUrl}
                 onChange={(e) => {
-                  setCustomUrl(e.target.value);
-                  if (e.target.value) onSelect(e.target.value);
+                  const nextValue = e.target.value;
+                  setCustomUrl(nextValue);
+
+                  const validatedUrl = getSafeImageUrl(nextValue);
+                  if (validatedUrl) {
+                    onSelect(validatedUrl);
+                  }
                 }}
                 className="font-mono text-xs"
               />
@@ -139,12 +161,17 @@ export function ImagePicker({ onSelect, currentUrl }: ImagePickerProps) {
             <p className="text-[10px] text-muted-foreground">
               Paste any URL from Unsplash, Pexels, or your own hosting.
             </p>
+            {customUrl && !safeCustomUrl && (
+              <p className="text-[10px] text-destructive">
+                Invalid URL. Use a full http:// or https:// image link.
+              </p>
+            )}
           </div>
           
-          {customUrl && (
+          {safeCustomUrl && (
             <div className="relative aspect-video rounded-md border border-border overflow-hidden bg-muted">
               <img 
-                src={customUrl} 
+                src={safeCustomUrl} 
                 alt="Preview" 
                 className="w-full h-full object-cover"
                 onError={(e) => (e.currentTarget.style.display = 'none')}
