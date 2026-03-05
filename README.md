@@ -1,4 +1,5 @@
-﻿# Digital Editorial Journal
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+ # Digital Editorial Journal
 
 A React + Vite + Supabase digital editorial project with public reading, comments, admin CMS, moderation logs, and realtime sync.
 
