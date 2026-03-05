@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest an enhancement
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What user or maintainer problem does this address?
+      placeholder: Describe current pain point
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe your preferred solution.
+      placeholder: Describe expected behavior and scope
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternatives or tradeoffs you considered.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Links, mockups, prior discussions, or examples.

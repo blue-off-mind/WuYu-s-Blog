@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a reproducible problem
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting. Please provide enough detail to reproduce the issue.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+      placeholder: Clear and concise problem statement
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include exact steps and data needed to reproduce.
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, browser, Node version, package manager
+      placeholder: Windows 11, Edge 133, Node 22, pnpm 10
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste logs or add screenshots if available.
+      render: shell

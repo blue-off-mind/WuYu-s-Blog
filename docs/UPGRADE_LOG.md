@@ -1,5 +1,31 @@
 # Upgrade Log
 
+## 2026-03-05
+
+### 1. Open source project baseline
+
+- Added `.github/` community and governance files to shift from personal archive to maintainable open source project.
+- Added GitHub Actions CI workflow for `lint + test + build` on push/PR.
+- Added dependency review workflow, CodeQL static security scan workflow, and Dependabot weekly dependency update config.
+- Added issue templates (bug/feature) and pull request template for structured collaboration.
+- Added `CODEOWNERS` for review ownership.
+- Added `CONTRIBUTING.md` and `SECURITY.md` as contributor and security policy entry points.
+- Updated `README.md` with open source collaboration and automation sections.
+
+**Files**
+- `.github/workflows/ci.yml`
+- `.github/workflows/dependency-review.yml`
+- `.github/workflows/codeql.yml`
+- `.github/dependabot.yml`
+- `.github/CODEOWNERS`
+- `.github/ISSUE_TEMPLATE/bug_report.yml`
+- `.github/ISSUE_TEMPLATE/feature_request.yml`
+- `.github/ISSUE_TEMPLATE/config.yml`
+- `.github/pull_request_template.md`
+- `CONTRIBUTING.md`
+- `SECURITY.md`
+- `README.md`
+
 ## 2026-03-04
 
 ### 1. Admin session resilience after tab freeze/wake (Edge)

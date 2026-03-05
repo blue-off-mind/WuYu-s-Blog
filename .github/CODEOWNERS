@@ -1,0 +1,12 @@
+# Repository ownership
+* @Sherlock
+
+# Core app
+/src/ @Sherlock
+/public/ @Sherlock
+
+# Infrastructure and docs
+/.github/ @Sherlock
+/docs/ @Sherlock
+/supabase_schema.sql @Sherlock
+/update_schema_moderation.sql @Sherlock

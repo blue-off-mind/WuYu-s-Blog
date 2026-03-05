@@ -1,4 +1,5 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![CI](https://github.com/Sherlock/digital-editorial-journal/actions/workflows/ci.yml/badge.svg)
  # Digital Editorial Journal
 
 A React + Vite + Supabase digital editorial project with public reading, comments, admin CMS, moderation logs, and realtime sync.
@@ -82,6 +83,21 @@ pnpm preview
 pnpm lint
 pnpm test
 ```
+
+## Open Source Collaboration
+
+- Contribution guide: `CONTRIBUTING.md`
+- Security policy: `SECURITY.md`
+- Code ownership: `.github/CODEOWNERS`
+- Issue templates: `.github/ISSUE_TEMPLATE/`
+- Pull request template: `.github/pull_request_template.md`
+
+## CI and Automation
+
+- CI pipeline (`.github/workflows/ci.yml`) runs lint, tests, and build on push/PR.
+- Dependency review (`.github/workflows/dependency-review.yml`) checks dependency risk on PRs.
+- CodeQL (`.github/workflows/codeql.yml`) runs static analysis for JS/TS.
+- Dependabot (`.github/dependabot.yml`) opens weekly dependency update PRs.
 
 ## Architecture (Code Structure)
 
