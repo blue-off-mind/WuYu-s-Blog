@@ -11,7 +11,7 @@ Please do not open a public issue for security vulnerabilities.
 Report privately via:
 
 - GitHub Security Advisories (preferred)
-- Email: `security@your-domain.example` (replace with your real address)
+- Email: `wuyuu0801@gmail.com` 
 
 Include:
 
