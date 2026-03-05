@@ -26,6 +26,20 @@
 - `SECURITY.md`
 - `README.md`
 
+### 2. CodeQL High alert fix (`js/xss-through-dom`)
+
+- Fixed `DOM text reinterpreted as HTML` risk in admin image picker by preventing raw user input from flowing directly into image rendering.
+- Added URL sanitizer (`getSafeImageUrl`) and restricted accepted protocols to `http`/`https` only.
+- Updated direct-link flow to call `onSelect` only with validated URLs.
+- Switched preview image source to sanitized URL and added an inline invalid URL message for rejected input.
+
+**Files**
+- `src/components/admin/ImagePicker.tsx`
+
+### 3. Validation
+
+- `pnpm -s lint`: passed with existing warnings only (`react-refresh/only-export-components`)
+
 ## 2026-03-04
 
 ### 1. Admin session resilience after tab freeze/wake (Edge)
